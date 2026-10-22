@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudio } from '../context/AudioContext';
@@ -24,10 +26,29 @@ export const LibraryScreen: React.FC = () => {
     isFavorite,
     toggleFavorite,
     importLocalAudio,
+    libraryStatus,
+    libraryError,
+    hasMoreTracks,
+    loadLibrary,
+    loadMoreTracks,
   } = useAudio();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('All');
+  const isFirstSearch = useRef(true);
+
+  // Search the online catalogue once the user stops typing
+  useEffect(() => {
+    if (isFirstSearch.current) {
+      isFirstSearch.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      setSelectedGenre('All');
+      loadLibrary(searchQuery);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   // Extract unique genres
   const genres = useMemo(() => {
@@ -39,10 +60,11 @@ export const LibraryScreen: React.FC = () => {
     return Array.from(list);
   }, [tracks]);
 
-  // Filter tracks by query and genre
+  // Catalogue tracks are already searched server-side; local files are filtered here
   const filteredTracks = useMemo(() => {
     return tracks.filter((track) => {
       const matchesSearch =
+        !track.isLocal ||
         track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         track.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (track.album && track.album.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -127,6 +149,24 @@ export const LibraryScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={libraryStatus === 'loading' && tracks.length > 0}
+            onRefresh={() => loadLibrary(searchQuery)}
+            tintColor={Colors.primaryLight}
+          />
+        }
+        onEndReached={() => {
+          if (selectedGenre === 'All' && hasMoreTracks) loadMoreTracks();
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          tracks.some((t) => !t.isLocal) ? (
+            <Text style={styles.attribution}>
+              Music from Jamendo, licensed under Creative Commons.
+            </Text>
+          ) : undefined
+        }
         renderItem={({ item }) => (
           <TrackListItem
             track={item}
@@ -138,13 +178,29 @@ export const LibraryScreen: React.FC = () => {
           />
         )}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No tracks found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try a different search term or import an audio file from your device.
-            </Text>
-          </View>
+          libraryStatus === 'loading' ? (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color={Colors.primaryLight} />
+              <Text style={styles.emptySubtitle}>Loading music library...</Text>
+            </View>
+          ) : libraryStatus === 'error' ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="cloud-offline-outline" size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>Could not load music</Text>
+              <Text style={styles.emptySubtitle}>{libraryError}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => loadLibrary(searchQuery)}>
+                <Text style={styles.retryBtnText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>No tracks found</Text>
+              <Text style={styles.emptySubtitle}>
+                Try a different search term or import an audio file from your device.
+              </Text>
+            </View>
+          )
         }
       />
     </View>
@@ -263,5 +319,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
     maxWidth: 240,
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  attribution: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 12,
   },
 });

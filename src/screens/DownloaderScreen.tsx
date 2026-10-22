@@ -17,6 +17,7 @@ import {
   downloadVideoFile,
   VideoMetadata,
   DownloadFormat,
+  UnsupportedSourceError,
 } from '../services/downloaderService';
 import { useVideo } from '../context/VideoContext';
 import { useAudio } from '../context/AudioContext';
@@ -38,16 +39,10 @@ export const DownloaderScreen: React.FC = () => {
     percent: number;
   }>({ writtenMB: 0, totalMB: 0, percent: 0 });
 
-  const sampleLinks = [
-    { label: 'Never Gonna Give You Up', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
-    { label: 'Sci-Fi Film (Elephants Dream)', url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw' },
-    { label: 'VFX Action (Tears of Steel)', url: 'https://www.youtube.com/watch?v=kJQP7kiw5Fk' },
-  ];
-
-  const handleFetch = async (targetUrl?: string) => {
-    const url = targetUrl || urlInput.trim();
+  const handleFetch = async () => {
+    const url = urlInput.trim();
     if (!url) {
-      Alert.alert('Empty URL', 'Please paste a YouTube or video URL.');
+      Alert.alert('Empty URL', 'Please paste a direct video or audio URL.');
       return;
     }
 
@@ -55,8 +50,12 @@ export const DownloaderScreen: React.FC = () => {
       setIsFetching(true);
       const data = await fetchVideoDetails(url);
       setVideoMetadata(data);
-    } catch {
-      Alert.alert('Error', 'Could not fetch video info. Please verify the URL.');
+    } catch (err) {
+      if (err instanceof UnsupportedSourceError) {
+        Alert.alert('Unsupported Link', err.message);
+      } else {
+        Alert.alert('Error', 'Could not fetch video info. Please verify the URL.');
+      }
     } finally {
       setIsFetching(false);
     }
@@ -106,7 +105,7 @@ export const DownloaderScreen: React.FC = () => {
       id: `audio-${item.id}`,
       title: item.title,
       artist: item.author || 'Downloaded Media',
-      album: 'YouTube Downloads',
+      album: 'Downloads',
       duration: item.duration,
       artwork: item.thumbnail,
       uri: item.uri,
@@ -122,7 +121,7 @@ export const DownloaderScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Media Downloader</Text>
         <Text style={styles.subtitle}>
-          Save YouTube videos or direct MP4 streams to your device for offline play.
+          Save direct MP4 or MP3 links to your device for offline play.
         </Text>
       </View>
 
@@ -131,7 +130,7 @@ export const DownloaderScreen: React.FC = () => {
         <Ionicons name="link-outline" size={20} color={Colors.textMuted} style={styles.linkIcon} />
         <TextInput
           style={styles.textInput}
-          placeholder="Paste YouTube or MP4 link..."
+          placeholder="Paste an MP4 or MP3 link..."
           placeholderTextColor={Colors.textMuted}
           value={urlInput}
           onChangeText={setUrlInput}
@@ -154,28 +153,6 @@ export const DownloaderScreen: React.FC = () => {
             <Text style={styles.fetchButtonText}>Fetch</Text>
           )}
         </TouchableOpacity>
-      </View>
-
-      {/* Quick Test Links */}
-      <View style={styles.samplesSection}>
-        <Text style={styles.samplesLabel}>Quick Test YouTube Links:</Text>
-        <View style={styles.samplesRow}>
-          {sampleLinks.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.sampleChip}
-              onPress={() => {
-                setUrlInput(item.url);
-                handleFetch(item.url);
-              }}
-            >
-              <Ionicons name="logo-youtube" size={14} color={Colors.danger} />
-              <Text numberOfLines={1} style={styles.sampleChipText}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
 
       {/* Video Preview & Format Selection */}
@@ -320,7 +297,7 @@ export const DownloaderScreen: React.FC = () => {
             />
             <Text style={styles.noDownloadsTitle}>No downloads yet</Text>
             <Text style={styles.noDownloadsSubtitle}>
-              Paste a YouTube link above or try one of the quick test links to save your first video.
+              Paste a direct media link above to save your first video.
             </Text>
           </View>
         ) : (
@@ -410,6 +387,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginBottom: 16,
   },
   linkIcon: {
     marginRight: 8,
@@ -430,38 +408,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
-  },
-  samplesSection: {
-    marginTop: 14,
-    marginBottom: 16,
-  },
-  samplesLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  samplesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  sampleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxWidth: '48%',
-  },
-  sampleChipText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500',
   },
   previewCard: {
     backgroundColor: Colors.cardBackgroundElevated,

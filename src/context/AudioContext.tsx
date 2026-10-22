@@ -1,31 +1,40 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
-import { Track, RepeatMode, AudioContextType } from '../types/audio';
-import { DEFAULT_TRACKS } from '../data/defaultTracks';
+import { Track, RepeatMode, AudioContextType, LibraryStatus } from '../types/audio';
+import { fetchJamendoTracks, JAMENDO_PAGE_SIZE } from '../services/jamendoService';
 
-const FAVORITES_STORAGE_KEY = '@audioplayer_favorites_v1';
+const FAVORITES_STORAGE_KEY = '@audioplayer_favorite_tracks_v2';
 const LOCAL_TRACKS_STORAGE_KEY = '@audioplayer_local_tracks_v1';
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tracks, setTracks] = useState<Track[]>(DEFAULT_TRACKS);
-  const [queue, setQueue] = useState<Track[]>(DEFAULT_TRACKS);
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(DEFAULT_TRACKS[0]);
+  const [localTracks, setLocalTracks] = useState<Track[]>([]);
+  const [catalogTracks, setCatalogTracks] = useState<Track[]>([]);
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus>('idle');
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [hasMoreTracks, setHasMoreTracks] = useState<boolean>(false);
+  const [queue, setQueue] = useState<Track[]>([]);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [positionMillis, setPositionMillis] = useState<number>(0);
-  const [durationMillis, setDurationMillis] = useState<number>(DEFAULT_TRACKS[0].duration * 1000);
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [durationMillis, setDurationMillis] = useState<number>(0);
+  const [favoriteTracks, setFavoriteTracks] = useState<Track[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
   const [isPlayerModalVisible, setIsPlayerModalVisible] = useState<boolean>(false);
 
+  const tracks = useMemo(() => [...localTracks, ...catalogTracks], [localTracks, catalogTracks]);
+  const favorites = useMemo(() => favoriteTracks.map((t) => t.id), [favoriteTracks]);
+
   const soundRef = useRef<Audio.Sound | null>(null);
+  const librarySearchRef = useRef<string>('');
+  const libraryRequestRef = useRef<number>(0);
   const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stateRef = useRef({
     repeatMode,
@@ -63,7 +72,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Load persisted favorites
         const storedFavorites = await AsyncStorage.getItem(FAVORITES_STORAGE_KEY);
         if (storedFavorites) {
-          setFavorites(JSON.parse(storedFavorites));
+          const parsed = JSON.parse(storedFavorites);
+          if (Array.isArray(parsed)) {
+            setFavoriteTracks(parsed);
+          }
         }
 
         // Load persisted local tracks
@@ -71,8 +83,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (storedLocalTracks) {
           const parsed = JSON.parse(storedLocalTracks);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setTracks([...DEFAULT_TRACKS, ...parsed]);
-            setQueue([...DEFAULT_TRACKS, ...parsed]);
+            setLocalTracks(parsed);
           }
         }
       } catch (err) {
@@ -80,6 +91,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
     init();
+    loadLibrary();
 
     return () => {
       if (soundRef.current) {
@@ -123,6 +135,57 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
   }, [sleepTimerRemaining]);
+
+  const loadLibrary = async (search: string = '') => {
+    const requestId = ++libraryRequestRef.current;
+    librarySearchRef.current = search;
+    setLibraryStatus('loading');
+    setLibraryError(null);
+
+    try {
+      const results = await fetchJamendoTracks({ search });
+      // Ignore responses from searches that have since been superseded
+      if (requestId !== libraryRequestRef.current) return;
+      setCatalogTracks(results);
+      setHasMoreTracks(results.length === JAMENDO_PAGE_SIZE);
+      setLibraryStatus('ready');
+    } catch (err) {
+      if (requestId !== libraryRequestRef.current) return;
+      console.warn('Failed to load music library:', err);
+      setCatalogTracks([]);
+      setHasMoreTracks(false);
+      setLibraryError(err instanceof Error ? err.message : 'Could not load the music library.');
+      setLibraryStatus('error');
+    }
+  };
+
+  const loadMoreTracks = async () => {
+    if (libraryStatus !== 'ready' || !hasMoreTracks) return;
+
+    const requestId = ++libraryRequestRef.current;
+    setLibraryStatus('loading');
+
+    try {
+      const results = await fetchJamendoTracks({
+        search: librarySearchRef.current,
+        offset: catalogTracks.length,
+      });
+      if (requestId !== libraryRequestRef.current) return;
+      setCatalogTracks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [...prev, ...results.filter((t) => !seen.has(t.id))];
+      });
+      setHasMoreTracks(results.length === JAMENDO_PAGE_SIZE);
+    } catch (err) {
+      if (requestId !== libraryRequestRef.current) return;
+      console.warn('Failed to load more tracks:', err);
+      setHasMoreTracks(false);
+    } finally {
+      if (requestId === libraryRequestRef.current) {
+        setLibraryStatus('ready');
+      }
+    }
+  };
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) {
@@ -279,9 +342,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const toggleFavorite = async (trackId: string) => {
-    setFavorites((prev) => {
-      const exists = prev.includes(trackId);
-      const updated = exists ? prev.filter((id) => id !== trackId) : [...prev, trackId];
+    const track =
+      tracks.find((t) => t.id === trackId) ||
+      queue.find((t) => t.id === trackId) ||
+      (currentTrack?.id === trackId ? currentTrack : undefined);
+
+    setFavoriteTracks((prev) => {
+      const exists = prev.some((t) => t.id === trackId);
+      let updated: Track[];
+      if (exists) {
+        updated = prev.filter((t) => t.id !== trackId);
+      } else if (track) {
+        updated = [...prev, track];
+      } else {
+        return prev;
+      }
       AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
       return updated;
     });
@@ -344,12 +419,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           isLocal: true,
         };
 
-        const updatedTracks = [newTrack, ...tracks];
-        setTracks(updatedTracks);
+        const localList = [newTrack, ...localTracks];
+        setLocalTracks(localList);
         setQueue([newTrack, ...queue]);
 
         // Persist local tracks
-        const localList = updatedTracks.filter((t) => t.isLocal);
         await AsyncStorage.setItem(LOCAL_TRACKS_STORAGE_KEY, JSON.stringify(localList));
 
         // Start playing the newly imported track
@@ -384,12 +458,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         durationMillis,
         queue,
         tracks,
+        libraryStatus,
+        libraryError,
+        hasMoreTracks,
         favorites,
+        favoriteTracks,
         repeatMode,
         isShuffle,
         playbackRate,
         sleepTimerRemaining,
         isPlayerModalVisible,
+        loadLibrary,
+        loadMoreTracks,
         playTrack,
         pauseTrack,
         resumeTrack,

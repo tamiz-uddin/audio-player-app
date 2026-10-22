@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudio } from '../context/AudioContext';
@@ -8,8 +8,7 @@ import { Track } from '../types/audio';
 
 export const FavoritesScreen: React.FC = () => {
   const {
-    tracks,
-    favorites,
+    favoriteTracks,
     currentTrack,
     isPlaying,
     playTrack,
@@ -17,10 +16,6 @@ export const FavoritesScreen: React.FC = () => {
     isFavorite,
     toggleFavorite,
   } = useAudio();
-
-  const favoriteTracks = useMemo(() => {
-    return tracks.filter((t) => favorites.includes(t.id));
-  }, [tracks, favorites]);
 
   const handleTrackPress = async (track: Track) => {
     if (currentTrack?.id === track.id) {

@@ -15,9 +15,10 @@ A modern, high-performance audio player mobile application built with **React Na
   - Quick-toggle favorite button
   - Speed modifier modal (0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 2.0x)
   - Sleep timer with live countdown badge
+- 🌐 **Open Music Library**: Streams Creative Commons licensed music from the [Jamendo API](https://developer.jamendo.com/v3.0), with server-side search and infinite scroll.
 - 📂 **Local Device File Import**: Pick and play any audio file (`.mp3`, `.wav`, `.m4a`, etc.) directly from phone storage using `expo-document-picker`.
 - ❤️ **Favorites & Persistence**: Liked songs and imported tracks are automatically persisted across app restarts using `@react-native-async-storage/async-storage`.
-- 🔍 **Real-Time Search & Genre Filtering**: Instantly search by song title, artist, or album, and filter by genres (Synthwave, Chillout, Ambient, Funk, Lo-Fi).
+- 🔍 **Real-Time Search & Genre Filtering**: Instantly search by song title, artist, or album, and filter by the genres Jamendo reports for each track.
 - 📋 **Active Queue Management**: View upcoming tracks, jump to any track, and remove items from the playback queue.
 
 ---
@@ -36,12 +37,19 @@ A modern, high-performance audio player mobile application built with **React Na
 cd audio-player-app
 ```
 
-2. Start the Expo development server:
+2. Configure the music library. Register an app at [devportal.jamendo.com](https://devportal.jamendo.com) to get a free client ID, then:
+```bash
+cp .env.example .env.local
+# edit .env.local and set EXPO_PUBLIC_JAMENDO_CLIENT_ID
+```
+The client ID is embedded in the app bundle, as with any `EXPO_PUBLIC_` variable. Without it the Library tab shows an error, but imported local files still play.
+
+3. Start the Expo development server:
 ```bash
 npm start
 ```
 
-3. Choose your platform:
+4. Choose your platform:
 - **Android**: Press `a` in the terminal (or run `npm run android`)
 - **iOS**: Press `i` in the terminal (or run `npm run ios`)
 - **Web**: Press `w` in the terminal (or run `npm run web`)
@@ -65,8 +73,9 @@ audio-player-app/
 │   │   └── SpeedSelectorModal.tsx # Playback rate controller
 │   ├── context/
 │   │   └── AudioContext.tsx    # Global audio state & player controller
-│   ├── data/
-│   │   └── defaultTracks.ts    # Curated royalty-free tracks collection
+│   ├── services/
+│   │   ├── jamendoService.ts   # Jamendo (Creative Commons) catalogue client
+│   │   └── downloaderService.ts # Direct media URL downloader
 │   ├── theme/
 │   │   └── colors.ts           # Dark mode styling palette & constants
 │   ├── types/

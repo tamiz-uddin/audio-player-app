@@ -8,7 +8,10 @@ export interface Track {
   uri: string;      // Stream URL or file:// URI
   isLocal?: boolean;
   genre?: string;
+  licenseUrl?: string; // Creative Commons licence for catalogue tracks
 }
+
+export type LibraryStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -20,7 +23,11 @@ export interface AudioContextType {
   durationMillis: number;
   queue: Track[];
   tracks: Track[];
+  libraryStatus: LibraryStatus;
+  libraryError: string | null;
+  hasMoreTracks: boolean;
   favorites: string[];
+  favoriteTracks: Track[];
   repeatMode: RepeatMode;
   isShuffle: boolean;
   playbackRate: number;
@@ -28,6 +35,8 @@ export interface AudioContextType {
   isPlayerModalVisible: boolean;
   
   // Actions
+  loadLibrary: (search?: string) => Promise<void>;
+  loadMoreTracks: () => Promise<void>;
   playTrack: (track: Track, customQueue?: Track[]) => Promise<void>;
   pauseTrack: () => Promise<void>;
   resumeTrack: () => Promise<void>;

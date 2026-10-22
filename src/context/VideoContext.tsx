@@ -4,7 +4,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { VideoItem, VideoContextType } from '../types/video';
-import { DEFAULT_VIDEOS } from '../data/defaultVideos';
 
 const VIDEO_STORAGE_KEY = '@auraplayer_downloaded_videos_v1';
 
@@ -14,7 +13,7 @@ export const VideoProvider: React.FC<{
   children: React.ReactNode;
   onBeforePlayVideo?: () => void;
 }> = ({ children, onBeforePlayVideo }) => {
-  const [videos, setVideos] = useState<VideoItem[]>(DEFAULT_VIDEOS);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
   const [activeVideo, setActiveVideo] = useState<VideoItem | null>(null);
   const [isVideoModalVisible, setIsVideoModalVisible] = useState<boolean>(false);
 
@@ -25,7 +24,7 @@ export const VideoProvider: React.FC<{
         if (stored) {
           const parsed: VideoItem[] = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setVideos([...parsed, ...DEFAULT_VIDEOS]);
+            setVideos(parsed);
           }
         }
       } catch (err) {

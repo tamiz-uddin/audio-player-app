@@ -28,53 +28,14 @@ export const extractYouTubeVideoId = (url: string): string | null => {
   return null;
 };
 
-// Fallback high-speed streams mapped to popular sample IDs for zero-fail offline/demo testing
-const DEMO_YOUTUBE_STREAMS: Record<string, string> = {
-  dQw4w9WgXcQ: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
-  jNQXAC9IVRw: 'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4',
-  kJQP7kiw5Fk: 'https://archive.org/download/Tears-of-Steel/tears_of_steel_720p.mp4',
-};
+export class UnsupportedSourceError extends Error {}
 
 export const fetchVideoDetails = async (inputUrl: string): Promise<VideoMetadata> => {
-  const videoId = extractYouTubeVideoId(inputUrl);
-
-  if (videoId) {
-    try {
-      const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-      const res = await fetch(oEmbedUrl);
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          id: videoId,
-          title: data.title || 'YouTube Video',
-          author: data.author_name || 'YouTube Creator',
-          thumbnail:
-            data.thumbnail_url ||
-            `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: 212,
-          isYouTube: true,
-          rawUrl: inputUrl,
-          streamUrl:
-            DEMO_YOUTUBE_STREAMS[videoId] ||
-            'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
-        };
-      }
-    } catch {
-      // fallback
-    }
-
-    return {
-      id: videoId,
-      title: `YouTube Video (${videoId})`,
-      author: 'YouTube',
-      thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-      duration: 180,
-      isYouTube: true,
-      rawUrl: inputUrl,
-      streamUrl:
-        DEMO_YOUTUBE_STREAMS[videoId] ||
-        'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
-    };
+  // YouTube does not expose direct media streams, so its links cannot be downloaded here
+  if (extractYouTubeVideoId(inputUrl)) {
+    throw new UnsupportedSourceError(
+      'YouTube links cannot be downloaded. Paste a direct link to an MP4 or MP3 file instead.'
+    );
   }
 
   // Direct video/audio URL
@@ -85,7 +46,7 @@ export const fetchVideoDetails = async (inputUrl: string): Promise<VideoMetadata
     author: 'Direct Web Media',
     thumbnail:
       'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80',
-    duration: 180,
+    duration: 0, // unknown until played
     isYouTube: false,
     rawUrl: inputUrl,
     streamUrl: inputUrl,
@@ -107,14 +68,8 @@ export const downloadVideoFile = async (
   const cleanTitle = metadata.title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
   const fileUri = `${downloadsDir}${cleanTitle}_${Date.now()}.${ext}`;
 
-  // Stream URL selection
-  let downloadSource = metadata.streamUrl;
-  if (format === 'audio_mp3') {
-    downloadSource = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-  }
-
   const downloadResumable = FileSystem.createDownloadResumable(
-    downloadSource,
+    metadata.streamUrl,
     fileUri,
     {},
     (downloadProgress) => {
