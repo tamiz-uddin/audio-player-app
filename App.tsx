@@ -3,18 +3,22 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { AudioProvider } from './src/context/AudioContext';
+import { AudioProvider, useAudio } from './src/context/AudioContext';
+import { VideoProvider } from './src/context/VideoContext';
 import { LibraryScreen } from './src/screens/LibraryScreen';
+import { VideosScreen } from './src/screens/VideosScreen';
+import { DownloaderScreen } from './src/screens/DownloaderScreen';
 import { FavoritesScreen } from './src/screens/FavoritesScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { MiniPlayer } from './src/components/MiniPlayer';
 import { PlayerModal } from './src/components/PlayerModal';
+import { VideoPlayerModal } from './src/components/VideoPlayerModal';
 import { Colors } from './src/theme/colors';
 
-type Tab = 'library' | 'favorites' | 'queue';
+type Tab = 'music' | 'videos' | 'downloader' | 'favorites' | 'queue';
 
 const MainApp: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('library');
+  const [activeTab, setActiveTab] = useState<Tab>('music');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -24,24 +28,26 @@ const MainApp: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.logoRow}>
           <View style={styles.logoBadge}>
-            <Ionicons name="musical-notes" size={18} color="#FFFFFF" />
+            <Ionicons name="play-circle" size={20} color="#FFFFFF" />
           </View>
           <Text style={styles.brandTitle}>
-            AURA<Text style={styles.brandHighlight}>PLAYER</Text>
+            AURA<Text style={styles.brandHighlight}>MEDIA</Text>
           </Text>
         </View>
 
         <View style={styles.headerRight}>
           <View style={styles.onlineBadge}>
             <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>HQ Audio</Text>
+            <Text style={styles.onlineText}>HD Media</Text>
           </View>
         </View>
       </View>
 
       {/* Main Content Screen */}
       <View style={styles.screenContainer}>
-        {activeTab === 'library' && <LibraryScreen />}
+        {activeTab === 'music' && <LibraryScreen />}
+        {activeTab === 'videos' && <VideosScreen />}
+        {activeTab === 'downloader' && <DownloaderScreen />}
         {activeTab === 'favorites' && <FavoritesScreen />}
         {activeTab === 'queue' && <QueueScreen />}
       </View>
@@ -52,25 +58,67 @@ const MainApp: React.FC = () => {
 
         <SafeAreaView edges={['bottom']} style={styles.tabBarSafeArea}>
           <View style={styles.tabBar}>
+            {/* Music Tab */}
             <TouchableOpacity
               style={styles.tabItem}
-              onPress={() => setActiveTab('library')}
+              onPress={() => setActiveTab('music')}
             >
               <Ionicons
-                name={activeTab === 'library' ? 'musical-notes' : 'musical-notes-outline'}
+                name={activeTab === 'music' ? 'musical-notes' : 'musical-notes-outline'}
                 size={22}
-                color={activeTab === 'library' ? Colors.primaryLight : Colors.textMuted}
+                color={activeTab === 'music' ? Colors.primaryLight : Colors.textMuted}
               />
               <Text
                 style={[
                   styles.tabLabel,
-                  activeTab === 'library' && styles.tabLabelActive,
+                  activeTab === 'music' && styles.tabLabelActive,
                 ]}
               >
-                Library
+                Music
               </Text>
             </TouchableOpacity>
 
+            {/* Videos Tab */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => setActiveTab('videos')}
+            >
+              <Ionicons
+                name={activeTab === 'videos' ? 'videocam' : 'videocam-outline'}
+                size={22}
+                color={activeTab === 'videos' ? Colors.accent : Colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === 'videos' && { color: Colors.accent, fontWeight: '700' },
+                ]}
+              >
+                Videos
+              </Text>
+            </TouchableOpacity>
+
+            {/* Downloader Tab */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => setActiveTab('downloader')}
+            >
+              <Ionicons
+                name={activeTab === 'downloader' ? 'cloud-download' : 'cloud-download-outline'}
+                size={22}
+                color={activeTab === 'downloader' ? Colors.primaryLight : Colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === 'downloader' && styles.tabLabelActive,
+                ]}
+              >
+                Download
+              </Text>
+            </TouchableOpacity>
+
+            {/* Favorites Tab */}
             <TouchableOpacity
               style={styles.tabItem}
               onPress={() => setActiveTab('favorites')}
@@ -83,13 +131,14 @@ const MainApp: React.FC = () => {
               <Text
                 style={[
                   styles.tabLabel,
-                  activeTab === 'favorites' && styles.tabLabelActive,
+                  activeTab === 'favorites' && { color: Colors.accentPink, fontWeight: '700' },
                 ]}
               >
                 Favorites
               </Text>
             </TouchableOpacity>
 
+            {/* Queue Tab */}
             <TouchableOpacity
               style={styles.tabItem}
               onPress={() => setActiveTab('queue')}
@@ -97,7 +146,7 @@ const MainApp: React.FC = () => {
               <Ionicons
                 name={activeTab === 'queue' ? 'list' : 'list-outline'}
                 size={22}
-                color={activeTab === 'queue' ? Colors.accent : Colors.textMuted}
+                color={activeTab === 'queue' ? Colors.primaryLight : Colors.textMuted}
               />
               <Text
                 style={[
@@ -112,9 +161,22 @@ const MainApp: React.FC = () => {
         </SafeAreaView>
       </View>
 
-      {/* Full-Screen Player Modal */}
+      {/* Full-Screen Audio Player Modal */}
       <PlayerModal />
+
+      {/* Full-Screen Video Player Modal */}
+      <VideoPlayerModal />
     </SafeAreaView>
+  );
+};
+
+const AppWithProviders: React.FC = () => {
+  const { pauseTrack } = useAudio();
+
+  return (
+    <VideoProvider onBeforePlayVideo={pauseTrack}>
+      <MainApp />
+    </VideoProvider>
   );
 };
 
@@ -122,7 +184,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AudioProvider>
-        <MainApp />
+        <AppWithProviders />
       </AudioProvider>
     </SafeAreaProvider>
   );
@@ -162,7 +224,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   brandHighlight: {
-    color: Colors.primaryLight,
+    color: Colors.accent,
   },
   headerRight: {
     flexDirection: 'row',
@@ -171,7 +233,7 @@ const styles = StyleSheet.create({
   onlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -181,12 +243,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.success,
+    backgroundColor: Colors.accent,
   },
   onlineText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.success,
+    color: Colors.accent,
   },
   screenContainer: {
     flex: 1,
@@ -216,7 +278,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     color: Colors.textMuted,
     marginTop: 3,
